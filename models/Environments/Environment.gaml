@@ -21,7 +21,7 @@ species environment virtual:true{
 	/*
 	 * Mobility graph for vehicles and pedestrian
 	 */
-	graph<road,intersection> road_network;
+	graph<intersection, road> road_network;
 	graph<corridor> pedestrian_network;
 	
 	/*

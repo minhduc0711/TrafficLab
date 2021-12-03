@@ -45,7 +45,7 @@ species simple_people parent:people skills:[pedestrian] {
 			target <- current_environment.any_location(self);
 		}
 		
-		do walk target:target; //bounds:current_building.get_free_space();
+		do walk_to target:target; //bounds:current_building.get_free_space();
 		
 		if(arrived_at_destination()) {}
 		
@@ -76,7 +76,7 @@ species simple_people parent:people skills:[pedestrian] {
 	
 }
 
-species advanced_people parent:people skills:[escape_pedestrian] {
+species advanced_people parent:people skills:[pedestrian] {
 	
 	float speed <- 1#m/#s;
 	
@@ -84,8 +84,8 @@ species advanced_people parent:people skills:[escape_pedestrian] {
 		if(target = nil){ 
 			color <- rgb(#blue,rnd(1.0));
 			target <- current_environment.any_location(self);
-			final_target <- target;
-			do compute_virtual_path pedestrian_graph:current_environment.pedestrian_network  final_target: final_target ;	
+			final_waypoint<- target;
+			do compute_virtual_path pedestrian_graph:current_environment.pedestrian_network  target: final_waypoint ;	
 		}
 		if(arrived_at_destination()){ 
 			
@@ -97,7 +97,7 @@ species advanced_people parent:people skills:[escape_pedestrian] {
 	}
 	
 	bool arrived_at_destination {
-		if(current_target = nil){
+		if(current_waypoint = nil){
 			arrive <- true;
 			target <- nil;
 			color <- #red;
@@ -114,9 +114,9 @@ species advanced_people parent:people skills:[escape_pedestrian] {
 				loop l over:current_path.segments {
 					draw l color:side_color;
 				}
-				draw cross(0.1,0.1) at:current_target color:#red;
-				if (final_target != nil) {draw cross(0.1,0.1) at:final_target color:#green;}
-				draw ""+int(self) at:current_target+{0.5,0.5,0} color:#red;
+				draw cross(0.1,0.1) at:current_waypoint.location color:#red;
+				if (final_waypoint != nil) {draw cross(0.1,0.1) at:final_waypoint.location color:#green;}
+				draw ""+int(self) at:current_waypoint.location+{0.5,0.5,0} color:#red;
 			}
 			match "destination" {
 				draw triangle(shoulder_length) rotate: heading + 90 color:color;

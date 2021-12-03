@@ -7,7 +7,7 @@
 
 model Vehicle
 
-import "People.gaml"
+//import "People.gaml"
 import "../Environments/Environment.gaml"
 import "../AbstractLab.gaml"
 
@@ -50,12 +50,13 @@ species vehicle skills:[advanced_driving] {
 	// ------------------------------------------ //
 	
 	reflex autonomous_move when:autonomous {
-		
 		if(final_target = nil){
 			do define_target(context.any_destination(self));
 		}
-		
-		do drive;
+		// NOTE: for public transport agents, final_target can still be nil if it's not time to go yet
+		if (final_target != nil) {
+			do drive;
+		}
 	}
 	
 	reflex move when:!autonomous and driver != nil {
@@ -71,17 +72,13 @@ species vehicle skills:[advanced_driving] {
 	}
 	
 	action define_target(point to_destination){
-		final_target <- to_destination;
-		
-		current_path <- compute_path(context.road_network, 
-			context.road_network.vertices closest_to final_target,
-			on_road::road closest_to self
-		);
+		intersection tgt <- context.road_network.vertices closest_to to_destination;
+		current_path <- compute_path(context.road_network, tgt);
 	}
 	
 	abort {
 		if current_road != nil {
-			ask road(current_road) {do unregister agent:myself;}
+			do unregister;
 		}
 	}
 	
@@ -119,7 +116,7 @@ species car parent:vehicle {
 	}
 	
 	aspect big {
-		draw rectangle(vehicle_width*3,vehicle_length*3) rotate:heading+90 color:color;
+		draw rectangle(vehicle_width*3,vehicle_length*3) rotate:heading+90 color:color border: #black;
 	}
 	
 }
@@ -128,7 +125,7 @@ species moto parent:vehicle {
 	
 }
 
-species bus skills:[escape_publictransport_skill] parent:vehicle {
+species bus skills:[public_transport] parent:vehicle {
 	// Quid of capture/release ?
 	
 	list<people> passengers;
@@ -149,9 +146,9 @@ species bus skills:[escape_publictransport_skill] parent:vehicle {
 		
 		// If there is next stop defined but no target
 		if next_stop != nil and final_target = nil and is_time_to_go() {
-				final_target <- next_stop;
-				current_path <- compute_path(graph: context.road_network, target: next_stop);
-				if(current_path = nil) { error "WARNING: nil current path : " + transport_line + ";" + location + ";" + next_stop; }
+			write name + " is computing path to reach " + next_stop;
+			current_path <- compute_path(graph: context.road_network, target: next_stop);
+			if(current_path = nil) { error "WARNING: nil current path : " + transport_line + ";" + location + ";" + next_stop; }
 		}
 		
 	}
@@ -161,7 +158,7 @@ species bus skills:[escape_publictransport_skill] parent:vehicle {
 	}
 	
 	aspect big {
-		draw rectangle(vehicle_width*3,vehicle_length*3) rotate:heading+90 color:color;
+		draw rectangle(vehicle_width*5,vehicle_length*5) rotate:heading+90 color:color border: #black;
 	}
 	
 }

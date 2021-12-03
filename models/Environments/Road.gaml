@@ -34,19 +34,19 @@ species road skills:[skill_road] parent:block {
 	
 	geometry compute_display_shape {
 		
-		list<float> vals <- list_with(lanes,0.0);
+		list<float> vals <- list_with(num_lanes,0.0);
 		float init;
 		if(empty(linked_road)){
-			if(lanes=1){
+			if(num_lanes=1){
 				return shape;
 			} else {
-				init <- -(span_between_lanes * (lanes-2) / 2 + (lanes mod 2 = 0 ? span_between_lanes/2 : 0));
+				init <- -(span_between_lanes * (num_lanes-2) / 2 + (num_lanes mod 2 = 0 ? span_between_lanes/2 : 0));
 			}
 		} else {
 			init <- span_between_lanes/2;
 		}
 		
-		loop i from:0 to:lanes-1 {
+		loop i from:0 to:num_lanes-1 {
 			vals[i] <- init + span_between_lanes * i;
 		}
 		
@@ -62,7 +62,7 @@ species road skills:[skill_road] parent:block {
 	}
 	
 	aspect default {
-		draw shape color:#black end_arrow:1;
+		draw shape color:#black end_arrow:5;
 	}
 	
 	aspect base {
@@ -83,7 +83,7 @@ species intersection skills:[skill_road_node] parent:block {
 	}
 	
 	aspect default {
-		draw circle(0.5#m) color:inout?#green:#gray;
+		draw circle(5#m) color:inout?#green:#gray;
 	}
 }
 

@@ -116,9 +116,9 @@ global {
 				pedestrian_model::"simple"
 			]{
 				obstacle_species <- obs_species;
-				obstacle_distance_repulsion_coeff <- P_obstacle_distance_repulsion_coeff;
-				overlapping_coefficient <- P_overlapping_coefficient;
-				perception_sensibility <- P_perception_sensibility ;
+//				obstacle_distance_repulsion_coeff <- P_obstacle_distance_repulsion_coeff;
+//				overlapping_coefficient <- P_overlapping_coefficient;
+//				perception_sensibility <- P_perception_sensibility ;
 				shoulder_length <- P_shoulder_length;
 				avoid_other <- P_avoid_other;
 				proba_detour <- P_proba_detour;
@@ -131,13 +131,13 @@ global {
 				pedestrian_model::walking_model
 			]{
 				obstacle_species <- obs_species;
-				obstacle_distance_repulsion_coeff <- P_obstacle_distance_repulsion_coeff;
-				overlapping_coefficient <- P_overlapping_coefficient;
-				perception_sensibility <- P_perception_sensibility ;
+//				obstacle_distance_repulsion_coeff <- P_obstacle_distance_repulsion_coeff;
+//				overlapping_coefficient <- P_overlapping_coefficient;
+//				perception_sensibility <- P_perception_sensibility ;
 				shoulder_length <- P_shoulder_length;
 				avoid_other <- P_avoid_other;
 				proba_detour <- P_proba_detour;
-				tolerance_target <- P_tolerance_target;
+//				tolerance_target <- P_tolerance_target;
 			}
 		}
 		

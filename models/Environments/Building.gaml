@@ -188,7 +188,7 @@ global {
 		create building returns:b {
 			
 			rooms <- list(room);
-			list<geometry> lines <- generate_pedestrian_network([wall],room,true,false,3.0,0.1,true,0.1,0.0,0.0);
+			list<geometry> lines <- generate_pedestrian_network([wall],room,true,false,3.0,0.1,true,0.1,0.0,0.0,0.0);
 			if benchmark { write "Create "+sample(self)+" pedestrian network ["+string(machine_time-t)+"ms]"; t <- machine_time;}
 			
 			create corridor from: lines collect simplification(each, 0.01) with:[env::self] { do initialize distance:corridor_size obstacles:[wall]; }

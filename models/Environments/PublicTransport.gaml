@@ -16,7 +16,7 @@ global {
 	 * 
 	 * TODO : add parameter to tweak bus stop creation on bus line path (e.g. every n meter) 
 	 */
-	graph<road,intersection> generate_public_transport(container<road> roads,container<intersection> intersections, 
+	graph<intersection, road> generate_public_transport(container<road> roads,container<intersection> intersections, 
 		map<string,rgb> bus_lines_color, float average_bus_speed <- base_bus_speed, float proba_bus_stop_on_segment <- 0.4
 	) {
 		
@@ -25,21 +25,25 @@ global {
 		graph fake_net <- as_edge_graph(roads);
 			
 		// Create bus lines
-		map<string,path> bus_lines;
-		loop bl over:bus_lines_color.keys {
+		map<string,path> bus_line_paths;
+		loop bl over:bus_lines_color.keys {			
 			list<point> in_out <- intersections where each.inout collect each.location;
 			point start <- any(in_out); in_out >- start;
-			add path_between(fake_net,start,any(in_out)) at:bl to:bus_lines;
+			point end <- any(in_out);
+			add path_between(fake_net,start,end) at:bl to: bus_line_paths;
 		}
 		
-		if debug {write "\nDefined "+length(bus_lines)+" : 
-			\n"+bus_lines.pairs collect (each.key+" with total length of "+each.value.distance+"m\n");
+		if debug {write "\nDefined "+length(bus_line_paths)+" : 
+			\n"+bus_line_paths.pairs collect (each.key+" with total length of "+each.value.distance+"m\n");
 		}
 		
 		// Create bus stops
+		map<point, bus_stop> existing_bus_stops;
 		map<string, list<bus_stop>> bus_stops;
 		loop bl over:bus_lines_color.keys {
-			add random_bus_stop_on_path(bus_lines[bl], proba_bus_stop_on_segment) at:bl to:bus_stops;
+			add random_bus_stop_on_path(bus_line_paths[bl], 
+					proba_bus_stop_on_segment, existing_bus_stops) 
+					at:bl to:bus_stops;
 		}
 		
 		if debug {write "\nCreate new road to intersect with bus stops and kill the old ones";}
@@ -50,42 +54,45 @@ global {
 			
 			ask road first_with (bs overlaps each) {
 				create road with:[shape::line(first(self.shape.points),bs.location),
-					env::env,lanes::lanes,maxspeed::maxspeed
+					env::env,num_lanes::num_lanes,maxspeed::maxspeed
 				]{
 					if myself.linked_road != nil {
 						create road with:[shape::line(bs.location,last(myself.linked_road.shape.points)),
-							env::myself.env,lanes::myself.lanes,maxspeed::myself.maxspeed
+							env::myself.env,num_lanes::myself.num_lanes,maxspeed::myself.maxspeed
 						];						
-					}	
+					}
 				}
 				create road with:[shape::line(bs.location::last(self.shape.points)),
-					env::env,lanes::lanes,maxspeed::maxspeed
+					env::env,num_lanes::num_lanes,maxspeed::maxspeed
 				]{
 					if myself.linked_road != nil {
 						create road with:[shape::line(first(myself.linked_road.shape.points),bs.location),
-							env::myself.env,lanes::myself.lanes,maxspeed::myself.maxspeed
+							env::myself.env,num_lanes::myself.num_lanes,maxspeed::myself.maxspeed
 						];
 					}
 				}
-				do die;
 				if linked_road != nil {ask linked_road {do die;}}
+				do die;
 			}
 		}	
 		
 		if debug {write "Create new road network with intersections and bus stops";}
 		list<point> bus_stop_location <- bus_stop collect each.location;
-		graph<road,intersection> result_graph <- as_driving_graph(road, 
+		graph<intersection, road> result_graph <- as_driving_graph(road,
 			list<intersection>(intersection where not(bus_stop_location contains each.location)+bus_stop)
 		);
 		
 		// Update bus line path with the graph generated with bus stops
 		loop bl over:bus_lines_color.keys {
-			add path_between(topology(result_graph), bus_stops[bl]) at:bl to:bus_lines;
-			geometry bl_geom <- union(bus_lines[bl].edges);
+			path p <- path_between(topology(result_graph), bus_stops[bl]);
+			add p at:bl to:bus_line_paths;
+			write p;
+			geometry bl_geom <- union(bus_line_paths[bl].edges);
 			if bus_stops[bl] one_matches not(each overlaps bl_geom) {
 				error "New bus line path does not go through all defined bus stops";
 			}  
-		}	
+		}
+		write "new length of list of bus paths: " + length(bus_line_paths);
 		
 		if not(result_graph.vertices contains_all bus_stop) {error "Bus stops have not been put in the road network correctly";}
 		
@@ -100,41 +107,39 @@ global {
 		// Create bus schedule
 		loop bl over:bus_stops.keys {
 			
-			list<bus_stop> foward_bus_stop <- bus_stops[bl];
-			path foward_line <- bus_lines[bl];
+			list<bus_stop> forward_bus_stops <- bus_stops[bl];
+			path forward_line_path <- bus_line_paths[bl];
 			
 			if debug {write "Start loading bus line "+bl+">> (foward)"
-				+" [len="+foward_line.distance+";stops="+length(foward_bus_stop)+"]";
+				+" [len="+forward_line_path.distance+";stops="+length(forward_bus_stops)+"]";
 			}
 			
-			create bus_line with:[name::bl+">>",color::bus_lines_color[bl],
-				the_stops::foward_bus_stop as_map (bl+">>"+(foward_bus_stop index_of each) :: each),
-				the_path::foward_line,next_departure::1
+			create bus_line with:[name::"bus_line"+bl+">>",color::bus_lines_color[bl],
+				the_stops::forward_bus_stops as_map (bl+">>"+(forward_bus_stops index_of each) :: each),
+				the_path::forward_line_path,next_departure::1
 			] {
 				loop s over:the_stops {s.bus_lines <+ self;}
-				do setup_schedule(myself.estimated_travel_time(result_graph, bus_lines[bl],
-					foward_bus_stop, average_bus_speed, bl+">>", debug
+				do setup_schedule(myself.estimated_travel_time(result_graph, bus_line_paths[bl],
+					forward_bus_stops, average_bus_speed, bl+">>", debug
 				), departure_times, debug);
 			}
 			
-			
-			list<bus_stop> reverse_bus_stop <- reverse(copy(bus_stops[bl])); 
-			path reverse_line <- path_between(result_graph, point(last(bus_lines[bl].vertices)), point(first(bus_lines[bl].vertices)));
+			list<bus_stop> reverse_bus_stops <- reverse(copy(bus_stops[bl])); 
+			path reverse_line_path <- path_between(topology(result_graph), reverse_bus_stops);
 			
 			if debug {write "Start loading bus line >>"+bl+" (backward)"
-				+" [len="+reverse_line.distance+";stops="+length(reverse_bus_stop)+"]";
+				+" [len="+reverse_line_path.distance+";stops="+length(reverse_bus_stops)+"]";
 			}
 			
-			create bus_line with:[name::">>"+bl,color::bus_lines_color[bl],
-				the_stops::reverse_bus_stop as_map (bl+"<<"+reverse_bus_stop index_of each :: each),
-				the_path::reverse_line,next_departure::1
+			create bus_line with:[name::"bus_line"+bl+"<<",color::bus_lines_color[bl],
+				the_stops::reverse_bus_stops as_map (bl+"<<"+reverse_bus_stops index_of each :: each),
+				the_path::reverse_line_path,next_departure::1
 			] {
 				loop s over:the_stops {s.bus_lines <+ self;}
-				do setup_schedule(myself.estimated_travel_time(result_graph, reverse_line,
-					reverse_bus_stop, average_bus_speed, ">>"+bl, debug
+				do setup_schedule(myself.estimated_travel_time(result_graph, reverse_line_path,
+					reverse_bus_stops, average_bus_speed, ">>"+bl, debug
 				), departure_times, debug);
 			}
-			
 		}
 		
 		return result_graph;
@@ -143,12 +148,22 @@ global {
 	/*
 	 * Randomly creates bus stop on a path
 	 */
-	list<bus_stop> random_bus_stop_on_path(path the_path, float proba_bus_stop_on_segment) {
+	list<bus_stop> random_bus_stop_on_path(path the_path, float proba_bus_stop_on_segment,
+			map<point, bus_stop> existing_bus_stops) {
+		write the_path;
 		list<bus_stop> bus_line_stops;
 		
 		// Starting bus stop
-		create bus_stop with:[ location::intersection(the_path.source).location ] returns:bs;
-		bus_line_stops <+ bs[0];
+		point src_point <- intersection(the_path.source).location;
+		bus_stop stop;
+		if (existing_bus_stops.keys contains src_point) {
+			stop <- existing_bus_stops[src_point]; 
+		} else {
+			create bus_stop with:[ location::src_point ] returns:bs;
+			stop <- bs[0];
+			existing_bus_stops[src_point] <- stop;
+		}
+		bus_line_stops <+ stop;
 		
 		// Loop over other stops
 		loop r from:1 to:length(the_path.edges)-2 {
@@ -157,8 +172,8 @@ global {
 				bus_stop new_bs <- bus_stop first_with (each overlaps the_road);
 				if new_bs = nil {
 					point loc_new_bs <- any_location_in(the_road);
-					loop while: loc_new_bs distance_to first(the_road.shape.points) < 5#m 
-						or loc_new_bs distance_to last(the_road.shape.points) < 5#m {
+					loop while: loc_new_bs distance_to first(the_road.shape.points) < 20#m 
+						or loc_new_bs distance_to last(the_road.shape.points) < 20#m {
 						// To avoid having to close intersection
 						loc_new_bs <- any_location_in(the_road);
 					} 
@@ -170,9 +185,15 @@ global {
 		}
 		
 		// Ending bus stop
-		create bus_stop with:[ location::intersection(the_path.target).location ] returns:bs;
-		bus_line_stops <+ bs[0];
-		
+		point dst_point <- intersection(the_path.target).location;
+		if (existing_bus_stops.keys contains dst_point) {
+			stop <- existing_bus_stops[dst_point]; 
+		} else {
+			create bus_stop with:[ location::dst_point ] returns:bs;
+			stop <- bs[0];
+			existing_bus_stops[dst_point] <- stop;
+		}
+		bus_line_stops <+ stop;
 		return bus_line_stops;
 	}
 	
@@ -200,7 +221,7 @@ global {
 	
 }
 
-species bus_line skills:[escape_publictransport_scheduler_skill]{
+species bus_line skills:[public_transport_scheduler]{
 	
 	string name;
 	
@@ -229,11 +250,12 @@ species bus_line skills:[escape_publictransport_scheduler_skill]{
 		
 		if not empty(stop_times) {
 			create bus with:[transport_line::name,color::self.color,context::env] returns:nb {
+				write myself.the_stops.values;
 				do define_route stops:myself.the_stops.values schedule:stop_times;
 				do init_departure;
 				add self to:myself.the_buses;
 			}
-			if debug {write sample(self)+" ["+name+"] create a new bus "+nb[0];}
+			if true {write sample(self)+" ["+name+"] create a new bus "+nb[0];}
 		}
 		
 	}
@@ -281,11 +303,11 @@ species bus_line skills:[escape_publictransport_scheduler_skill]{
 	}
 	
 	aspect default {
-		draw union(the_path.edges) buffer 1#m color:#transparent border:color;
+		draw union(the_path.edges) buffer 1#m color:#transparent border: #black;
 	}
 	
 	aspect big {
-		draw union(the_path.edges) buffer 4#m color:color;
+		draw union(the_path.edges) buffer 4#m color:rgb(color, 0.5) border: #black;
 	}
 	
 }
@@ -303,7 +325,7 @@ species bus_stop parent:intersection {
 	
 	aspect big {
 		loop bl over:bus_lines {
-			draw circle(10#m + bus_lines index_of bl) color:blend(bl.color,#black,0.8) border:#black;
+			draw circle(10#m + bus_lines index_of bl) color:rgb(blend(bl.color,#black,0.8), 0.5) border:#black;
 		}
 	}
 }

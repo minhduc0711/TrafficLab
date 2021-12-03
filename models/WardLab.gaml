@@ -18,14 +18,14 @@ global {
 	 
 	float seed <- 1233445;
 	
-	float step <- 10#sec;
+	float step <- 0.5#sec;
 	
 	string setup parameter:true init:"simple" among:["simple", "multiple", "complex"] category:"Transport system";
 	int number_of_intersections parameter:true init:20 min:5 category:"Transport system";
 	
 	int nb_bus_lines parameter:true init:0 max:12 category:"Public transport";
 	
-	int number_of_vehicles parameter:true init:20 min:0 max:100 category:vehicle;
+	int number_of_vehicles parameter:true init:0 min:0 max:100 category:vehicle;
 	bool autonomous_vehicles init:true category:vehicle;
 	
 	// Multiple args
@@ -63,7 +63,7 @@ global {
 		if verbose {write "Start generating roads and intersections";}
 		// ----------------------------------- //
 		
-		create road from:split_lines(lines) with:[env::env,lanes::2,maxspeed::50#km/#h];
+		create road from:split_lines(lines) with:[env::env,num_lanes::2,maxspeed::50#km/#h];
 		
 		loop p over:as_edge_graph(road).vertices collect each.location {
 			create intersection with:[env::env,shape::p] {
@@ -79,7 +79,7 @@ global {
 			if(r.shape.points one_matches (inout contains (each))
 				or flip(two_way_road_proba)
 			){
-				create road with:[env::r.env,lanes::r.lanes,
+				create road with:[env::r.env,num_lanes::r.num_lanes,
 					shape::polyline(reverse(r.shape.points)),maxspeed::r.maxspeed
 				]{
 					linked_road <- r; r.linked_road <- self;
@@ -123,14 +123,14 @@ global {
 		
 		ask road {display_shape <- compute_display_shape();}
 		
-		if road one_matches (each.lanes = nil){ error sample(road first_with (each.lanes = nil)); }
+		if road one_matches (each.num_lanes = nil){ error sample(road first_with (each.num_lanes = nil)); }
 		
 		// ----------------------------------- //
 		if verbose {write "Start generating pedestrian network";}
 		// ----------------------------------- //
 		
 		bool small_coridor <- true;
-		list<geometry> p_lines <- generate_pedestrian_network([],small_coridor ? road collect (each buffer 2#m) : [],true,false,3.0,0.001,true,0.1,0.0,0.0);
+		list<geometry> p_lines <- generate_pedestrian_network([],small_coridor ? road collect (each buffer 2#m) : [],true,false,3.0,0.001,true,0.1,0.0,0.0,0.0);
 		create corridor from: p_lines { do initialize distance:2#m; }
 		
 		env.pedestrian_network <- as_edge_graph(corridor);	
@@ -218,7 +218,7 @@ global {
 	list<geometry> complex_setup {
 		
 		create intersection number:number_of_intersections;
-		graph<road,intersection> small_world <- generate_watts_strogatz(intersection, road, 0.04, 2, true);
+		graph<road,intersection> small_world <- generate_watts_strogatz(100,0.04, 2, true, intersection, road);
 		
 		//small_world <- layout(small_world, "fruchtermanreingold", 10);
 		//small_world <- layout(small_world, "circle", 10);
@@ -271,19 +271,19 @@ experiment CrossRoadVehicleOnly parent:vehcile_lab {
 
 experiment WardPublicTransport parent:vehicle_lab {
 
-	parameter "bus line number" var:nb_bus_lines init:4 min:0 max:12 category:"Public transport";
-	parameter "nb cars" var:number_of_vehicles init:2000 category:vehicle;
+	parameter "bus line number" var:nb_bus_lines init: 12 min:0 max:12 category:"Public transport";
+	parameter "nb cars" var:number_of_vehicles init:0 category:vehicle;
 	parameter "setup" var:setup init:"multiple" category:"Transport system";
 	parameter "world size" var:world_size init:{2000,2000} category:"Global";
 	
 	output {
-		display main {
+		display main type: opengl synchronized: true {
 			species bus_line aspect:big;
-			species bus_stop aspect:big;
-			species road;
 			species bus aspect:big;
 			species car aspect:big;
-			
+			species bus_stop aspect:big;
+			species road;
+			species intersection;
 			species room;
 			species door;
 			species wall;
